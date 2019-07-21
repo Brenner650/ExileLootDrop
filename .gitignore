@@ -7,3 +7,5 @@ src/ExileLootDropTester/obj/*
 *.suo
 src/packages/*
 .hgignore
+@ExileLootDrop.zip
+src/ExileLootDropTester/ExileLootDropTester.csproj.user

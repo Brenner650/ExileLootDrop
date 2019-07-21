@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 
 namespace ExileLootDrop
 {
@@ -55,14 +56,23 @@ namespace ExileLootDrop
         }
         
         private readonly List<CfgGroup> _cfgGroups;
-        private Dictionary<string, LootTable> Table { get; } = new Dictionary<string, LootTable>();
-        
+        public Dictionary<string, LootTable> Table { get; } = new Dictionary<string, LootTable>();
+
         /// <summary>
         /// Loot constructor
         /// </summary>
         private Loot()
         {
-            const string cfgpath = "ExileLootDrop.cfg";
+            var assembly = Assembly.GetExecutingAssembly();
+            var assemblyName = Path.GetFileNameWithoutExtension(assembly.Location);
+            var iniPath = Path.Combine(BasePath, $"{Regex.Replace(assemblyName, @"_x64$", string.Empty)}.ini");
+            if (!File.Exists(iniPath))
+                throw new LootException($"{assemblyName}.ini was not found");
+            
+            var ini = new IniParser(iniPath);
+            var cfgpath = ini.GetSetting("General", "LootCfg", "ExileLootDrop.cfg");
+            var cacheCount = Convert.ToInt32(ini.GetSetting("General", "CacheItems", "0"));
+            
             Logger.LoggerHandlerManager.AddHandler(new ConsoleLoggerHandler());
             var logfile = Path.Combine(BasePath, "output.log");
             try
@@ -98,11 +108,11 @@ namespace ExileLootDrop
             foreach (var group in _cfgGroups)
             {
                 var list = FlattenGroups(group);
-                var table = new LootTable(group.Name, list);
+                var table = new LootTable(group.Name, list, cacheCount);
                 Table.Add(group.Name, table);
             }
             var span = DateTime.Now - start;
-            Logger.Log<Loot>($"Took {span.Milliseconds}ms to load and parse loot cfg");
+            Logger.Log<Loot>($"Took {span.TotalMilliseconds}ms to load and parse loot cfg");
         }
         
         /// <summary>
@@ -122,7 +132,7 @@ namespace ExileLootDrop
             var total = group.Items.Select(i => i.Chance).Sum();
             foreach (var item in group.Items.OrderByDescending(a => a.Chance))
             {
-                var chance = (decimal)item.Chance / total;
+                var chance = item.Chance / total;
                 var child = _cfgGroups.Find(g => g.Name == item.Item);
                 if (child != null)
                 {
@@ -157,11 +167,11 @@ namespace ExileLootDrop
             if (!Table.ContainsKey(table))
                 throw new LootTableNotFoundException($"No loot table called {table}");
 
-            var items = new List<string>();
+            var items = new string[count];
             for (var i = 0; i < count; i++)
-                items.Add(Table[table].Drop());
+                items[i] = Table[table].Drop();
 
-            return items.ToArray();
+            return items;
         }
 
         /// <summary>
